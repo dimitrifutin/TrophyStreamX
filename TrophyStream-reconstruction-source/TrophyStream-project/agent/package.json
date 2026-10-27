@@ -1,0 +1,21 @@
+{
+  "name": "trophystream-local-agent",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent local TrophyStream : Discord, PSN et pont WebSocket vers le plugin OBS natif.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "register-commands": "node src/register-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.19.3",
+    "express": "^5.1.0",
+    "psn-api": "^2.18.1",
+    "ws": "^8.18.2",
+    "dotenv": "^16.5.0"
+  }
+}
