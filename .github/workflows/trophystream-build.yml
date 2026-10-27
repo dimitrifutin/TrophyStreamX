@@ -7,22 +7,62 @@ on:
       - "TrophyStream-reconstruction-source/TrophyStream-project/**"
       - ".github/workflows/trophystream-build.yml"
 
+permissions:
+  contents: read
+
 jobs:
-  check:
+  build:
     runs-on: windows-2022
     steps:
-      - name: Download repository
+      - name: Checkout TrophyStream
         uses: actions/checkout@v4
 
-      - name: Check project files
+      - name: Checkout official OBS plugin build template
+        uses: actions/checkout@v4
+        with:
+          repository: obsproject/obs-plugintemplate
+          ref: master
+          path: obs-template
+
+      - name: Prepare TrophyStream source
         shell: pwsh
         run: |
-          $project = "TrophyStream-reconstruction-source/TrophyStream-project"
-          if (!(Test-Path "$project/plugin/CMakeLists.txt")) {
-            throw "Plugin CMakeLists.txt not found"
+          $project = "$env:GITHUB_WORKSPACE/TrophyStream-reconstruction-source/TrophyStream-project"
+          if (!(Test-Path "$project/plugin/trophy-stream.c")) { throw "TrophyStream source not found" }
+          Copy-Item "$project/plugin/trophy-stream.c" "obs-template/src/plugin-main.c" -Force
+          Copy-Item "$project/data/locale/*" "obs-template/data/locale/" -Recurse -Force
+          $specPath = "obs-template/buildspec.json"
+          $spec = Get-Content $specPath -Raw | ConvertFrom-Json
+          $spec.name = "trophy-stream"
+          $spec.displayName = "TrophyStream for OBS"
+          $spec.version = "0.2.0"
+          $spec | ConvertTo-Json -Depth 20 | Set-Content $specPath -Encoding utf8
+
+      - name: Configure with OBS dependencies
+        working-directory: obs-template
+        shell: pwsh
+        run: cmake --preset windows-x64
+
+      - name: Compile TrophyStream
+        working-directory: obs-template
+        shell: pwsh
+        run: cmake --build --preset windows-x64 --config RelWithDebInfo
+
+      - name: Install plugin files
+        working-directory: obs-template
+        shell: pwsh
+        run: cmake --install build_x64 --prefix "$env:GITHUB_WORKSPACE/release" --config RelWithDebInfo
+
+      - name: Show compiled files
+        shell: pwsh
+        run: |
+          Get-ChildItem "$env:GITHUB_WORKSPACE/release" -Recurse -File | Select-Object FullName
+          if (!(Get-ChildItem "$env:GITHUB_WORKSPACE/release" -Filter "trophy-stream.dll" -Recurse -File)) {
+            throw "trophy-stream.dll was not produced"
           }
-          if (!(Test-Path "$project/plugin/trophy-stream.c")) {
-            throw "Plugin source not found"
-          }
-          Write-Host "TrophyStream source files found."
-          Get-Content "$project/plugin/CMakeLists.txt"
+
+      - name: Upload compiled plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: TrophyStream-Windows-x64
+          path: release/**
